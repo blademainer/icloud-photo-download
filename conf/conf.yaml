@@ -1,0 +1,4 @@
+isChina: true
+user:
+  userName: ${user}
+  password: ${pass}
