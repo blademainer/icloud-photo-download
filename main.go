@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"github.com/blademainer/icloud-photo-download/pkg/icloud"
+	"github.com/blademainer/icloud-photo-download/pkg/icloud/config"
 	"golang.org/x/sync/errgroup"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,42 +28,38 @@ func main() {
 	// errgroup
 	g, ctx := errgroup.WithContext(ctx)
 
-	g.Go(func() error {
-		r := gin.Default()
-		server := &http.Server{Addr: ":8080", Handler: r}
-
-		shutdownFunctions = append(shutdownFunctions, func(ctx context.Context) {
-			err := server.Close()
+	g.Go(
+		func() error {
+			// _ = os.Setenv("ICLOUD_USER_USERNAME", "your_user")
+			// _ = os.Setenv("ICLOUD_USER_PASSWORD", "your_pass")
+			c, err := config.ReadConfig("conf/conf.yaml")
 			if err != nil {
-				fmt.Println("failed to close http server!")
-			} else {
-				fmt.Println("succeed to close http server!")
+				panic(err)
 			}
-		})
+			js, _ := json.Marshal(c)
+			fmt.Println(string(js))
 
-		r.GET("/ping", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"message": "pong",
-			})
-		}).
-			GET("/", func(c *gin.Context) {
-				_, err := c.Writer.Write([]byte("hello!\n"))
-				if err != nil {
-					fmt.Printf("error: %v\n", err.Error())
-				}
-				//c.String(http.StatusOK, "", "hello!\n")
-			})
-		err := server.ListenAndServe()
-		return err
-	})
+			cloud, err := icloud.NewICloud(
+				c,
+			)
+			if err != nil {
+				return err
+			}
+			err = cloud.Login()
+			if err != nil {
+				return err
+			}
+			return err
+		},
+	)
 
-	//http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
+	// http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 	//	_, err := writer.Write([]byte("hello!\n"))
 	//	if err != nil {
 	//		fmt.Printf("write error: %v \n", err.Error())
 	//	}
-	//})
-	//err := http.ListenAndServe(":8080", nil)
+	// })
+	// err := http.ListenAndServe(":8080", nil)
 	select {
 	case <-ctx.Done():
 		break

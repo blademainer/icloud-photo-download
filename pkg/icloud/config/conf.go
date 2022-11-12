@@ -1,17 +1,16 @@
 package config
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"strings"
 )
 
 type Config struct {
-	IsChina bool  `json:"is_china" yaml:"isChina"`
-	User    *User `json:"user" yaml:"user"`
-	Debug   bool  `json:"debug" yaml:"debug"`
+	IsChina     bool   `json:"is_china" yaml:"isChina"`
+	User        *User  `json:"user" yaml:"user"`
+	Debug       bool   `json:"debug" yaml:"debug"`
+	LoggerLevel string `json:"logger_level" yaml:"loggerLevel"`
 }
 
 type User struct {
@@ -24,20 +23,22 @@ func ReadConfig(file string) (*Config, error) {
 	v.SetConfigFile(file)
 	// v.SetConfigName("conf")
 	v.SetConfigType("yaml")
-	// v.SetEnvPrefix("icloud")
+
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	// v.AutomaticEnv()
-	// viper.MustBindEnv("user.user_name", "ICLOUD_USER_NAME")
-	// viper.MustBindEnv("user.password", "ICLOUD_PASSWORD")
-	v.Debug()
+	v.SetEnvPrefix("icloud")
+	v.AutomaticEnv()
+	// v.MustBindEnv("user.user_name")
+	// v.MustBindEnv("user.password")
+	// v.MustBindEnv("loggerlevel")
+	// v.Debug()
+
+	// env
 	err := v.ReadInConfig()
 	if err != nil {
 		return nil, err
 	}
 
 	c := &Config{}
-	js, _ := json.Marshal(c)
-	fmt.Println(string(js))
 	err = v.Unmarshal(c)
 	if err != nil {
 		return nil, err
@@ -47,24 +48,4 @@ func ReadConfig(file string) (*Config, error) {
 
 func confOpt(c *mapstructure.DecoderConfig) {
 	c.TagName = "yaml"
-}
-
-// defaultDecoderConfig returns default mapsstructure.DecoderConfig with suppot
-// of time.Duration values & string slices
-func defaultDecoderConfig(
-	output interface{}, opts ...viper.DecoderConfigOption,
-) *mapstructure.DecoderConfig {
-	c := &mapstructure.DecoderConfig{
-		Metadata:         nil,
-		Result:           output,
-		WeaklyTypedInput: true,
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			mapstructure.StringToTimeDurationHookFunc(),
-			mapstructure.StringToSliceHookFunc(","),
-		),
-	}
-	for _, opt := range opts {
-		opt(c)
-	}
-	return c
 }
