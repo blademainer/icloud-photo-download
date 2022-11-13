@@ -130,43 +130,6 @@ func (c *ICloud) Login() error {
 		return fmt.Errorf("can't get session token")
 	}
 
-	authReq, err := c.client.R().
-		// SetHeader("Origin", "https://idmsa.apple.com").
-		SetHeader("Origin", "https://www.icloud.com.cn").
-		SetHeader("Referer", "https://idmsa.apple.com").
-		SetHeader("X-Apple-Id-Session-Id", sessionID).
-		SetHeader("X-Apple-OAuth-Redirect-URI", "https://www.icloud.com.cn").
-		SetHeader("X-Apple-OAuth-Client-Type", "firstPartyAuth").
-		SetHeader("X-Apple-OAuth-Require-Grant-Code", "true").
-		SetHeader("X-Apple-OAuth-Response-Mode", "web_message").
-		SetHeader("X-Apple-OAuth-Response-Type", "code").
-		SetHeader("X-Requested-With", "XMLHttpRequest").
-		SetHeader("X-Apple-Domain-Id", "6").
-		SetHeader("X-Apple-Frame-Id", "auth-7hlrtbcm-4qxg-yrgs-yfkw-34xkak3k").
-		SetHeader("sec-ch-ua", `"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"`).
-		SetHeader("sec-ch-ua-mobile", "?0").
-		SetHeader("sec-ch-ua-platform", "macOS").
-		SetHeader("Sec-Fetch-Dest", "empty").
-		SetHeader("Sec-Fetch-Mode", "cors").
-		SetHeader("Sec-Fetch-Site", "same-origin").
-		SetHeader("scnt", scnt).
-		SetHeaders(CommonHeaders).
-		Get("https://idmsa.apple.com/appleauth/auth")
-	if err != nil {
-		logrus.Errorf("err: %v", err.Error())
-		return err
-	}
-	logrus.Debugf("auth status: %v", authReq.Status())
-	logrus.Debugf("auth header: %s", authReq.RawResponse.Header)
-	if authReq.StatusCode() != http.StatusOK {
-		logrus.Errorf("auth response: %s", authReq.Body())
-		return fmt.Errorf("auth failed: %v", authReq.Status())
-	}
-	if authAttrTmp := authReq.RawResponse.Header.Get("X-Apple-Auth-Attributes"); authAttrTmp != "" {
-		authAttr = authAttrTmp
-		logrus.Debugf("auth attr: %s", authAttr)
-	}
-
 	userInfo := &UserInfo{}
 	login, err := c.client.R().
 		SetHeaders(CommonHeaders).
@@ -197,6 +160,49 @@ func (c *ICloud) Login() error {
 	logrus.Debugf("login status: %v", login.Status())
 	logrus.Debugf("user info: %v", string(userStr))
 	logrus.Debugf("user info: %v", login.Result())
+
+	authReq, err := c.client.R().
+		// SetHeader("Origin", "https://idmsa.apple.com").
+		SetHeader("Referer", "https://idmsa.apple.com").
+		SetHeader("X-Apple-Id-Session-Id", sessionID).
+		SetHeader("X-Apple-Session-Token", sessionToken).
+		SetHeader("X-Apple-OAuth-Redirect-URI", "https://www.icloud.com.cn").
+		SetHeader("X-Apple-OAuth-Client-Type", "firstPartyAuth").
+		SetHeader("X-Apple-OAuth-Client-Id", c.clientID).
+		SetHeader("X-Apple-OAuth-Require-Grant-Code", "true").
+		SetHeader("X-Apple-OAuth-Response-Mode", "web_message").
+		SetHeader("X-Apple-OAuth-Response-Type", "code").
+		SetHeader("X-Requested-With", "XMLHttpRequest").
+		SetHeader("X-Apple-Domain-Id", "6").
+		SetHeader("X-Apple-AK-Auth-Type", "hsa2").
+		// SetHeader("X-Apple-Frame-Id", "auth-7hlrtbcm-4qxg-yrgs-yfkw-34xkak3k").
+		SetHeader("sec-ch-ua", `"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"`).
+		SetHeader("sec-ch-ua-mobile", "?0").
+		SetHeader("sec-ch-ua-platform", "macOS").
+		SetHeader("Sec-Fetch-Dest", "empty").
+		SetHeader("Sec-Fetch-Mode", "cors").
+		SetHeader("Sec-Fetch-Site", "same-origin").
+		SetHeader(
+			"X-Apple-Widget-Key",
+			"d39ba9916b7251055b22c7f910e2ea796ee65e98b2ddecea8f5dde8d9d1a815d",
+		).
+		SetHeader("scnt", scnt).
+		SetHeaders(CommonHeaders).
+		Get("https://idmsa.apple.com/appleauth/auth")
+	if err != nil {
+		logrus.Errorf("err: %v", err.Error())
+		return err
+	}
+	logrus.Debugf("auth status: %v", authReq.Status())
+	logrus.Debugf("auth header: %s", authReq.RawResponse.Header)
+	// if authReq.StatusCode() != http.StatusOK {
+	// 	logrus.Errorf("auth response: %s", authReq.Body())
+	// 	return fmt.Errorf("auth failed: %v", authReq.Status())
+	// }
+	if authAttrTmp := authReq.RawResponse.Header.Get("X-Apple-Auth-Attributes"); authAttrTmp != "" {
+		authAttr = authAttrTmp
+		logrus.Debugf("auth attr: %s", authAttr)
+	}
 
 	if !userInfo.DsInfo.HsaEnabled && userInfo.DsInfo.HsaVersion <= 1 {
 		return nil
