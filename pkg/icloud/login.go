@@ -61,7 +61,7 @@ func (c *ICloud) Login() error {
 		SetHeader("Referer", "https://icloud.com.cn").
 		Get(
 			fmt.Sprintf(
-				"https://setup.icloud.com.cn/setup/ws/1/validate?clientBuildNumber=2301Hotfix20&clientMasteringNumber=2301Hotfix20&clientId=%v",
+				"https://setup.icloud.com.cn/setup/ws/1/validate?clientBuildNumber=2302Hotfix226&clientMasteringNumber=2302Hotfix226&clientId=%v",
 				c.clientID,
 			),
 		)
@@ -96,10 +96,14 @@ func (c *ICloud) Login() error {
 	// }
 	// logrus.Debugf("header: %s", r2.Header())
 
+	rs := make(map[string]interface{})
 	signin, err := c.client.R().
 		SetHeaders(CommonHeaders).
 		SetHeader("Origin", "https://idmsa.apple.com").
 		SetHeader("Referer", "https://idmsa.apple.com").
+		SetHeader("X-Apple-OAuth-Response-Mode", "web_message").
+		SetHeader("X-Apple-OAuth-Response-Type", "code").
+		SetHeader("Content-Type", "application/json").
 		SetBody(
 			&LoginRequest{
 				AccountName: c.config.User.UserName,
@@ -107,7 +111,7 @@ func (c *ICloud) Login() error {
 				RememberMe:  true,
 			},
 		).
-		SetResult(make(map[string]string)).
+		SetResult(&rs).
 		Post("https://idmsa.apple.com/appleauth/auth/signin?isRememberMeEnabled=true")
 	if err != nil {
 		logrus.Errorf("err: %v", err.Error())
@@ -123,43 +127,17 @@ func (c *ICloud) Login() error {
 	logrus.Debugf("scnt: %s", scnt)
 	logrus.Debugf("signin status: %v", signin.Status())
 	logrus.Debugf("sign header: %s", signin.RawResponse.Header)
-	logrus.Debugf("sign resp: %v", signin.RawResponse)
-	logrus.Debugf("sign resp: %s", signin.Result())
+	// logrus.Debugf("sign resp: %v", signin.RawResponse)
+	// all, err := io.ReadAll(signin.RawResponse.Body)
+	// if err != nil {
+	// 	logrus.Errorf("err: %v", err.Error())
+	// 	return err
+	// }
+	logrus.Debugf("sign resp: %s", rs)
 
 	if sessionToken == "" {
 		return fmt.Errorf("can't get session token")
 	}
-
-	userInfo := &UserInfo{}
-	login, err := c.client.R().
-		SetHeaders(CommonHeaders).
-		// SetHeader("X-Apple-Id-Session-Id", sessionID).
-		SetHeader("Origin", "https://www.icloud.com.cn").
-		SetBody(
-			map[string]interface{}{
-				"accountCountryCode": "CHN",
-				"dsWebAuthToken":     sessionToken,
-				"extended_login":     false,
-			},
-		).
-		SetResult(userInfo).
-		Post(
-			fmt.Sprintf(
-				"https://setup.icloud.com.cn/setup/ws/1/accountLogin?clientBuildNumber=2301Hotfix20&clientMasteringNumber=2301Hotfix20&clientId=%v",
-				c.clientID,
-			),
-		)
-	if err != nil {
-		logrus.Errorf("err: %v", err.Error())
-		return err
-	}
-	userStr, err := json.Marshal(userInfo)
-	if err != nil {
-		return err
-	}
-	logrus.Debugf("login status: %v", login.Status())
-	logrus.Debugf("user info: %v", string(userStr))
-	logrus.Debugf("user info: %v", login.Result())
 
 	authReq, err := c.client.R().
 		// SetHeader("Origin", "https://idmsa.apple.com").
@@ -183,6 +161,10 @@ func (c *ICloud) Login() error {
 		SetHeader("Sec-Fetch-Mode", "cors").
 		SetHeader("Sec-Fetch-Site", "same-origin").
 		SetHeader(
+			"X-Apple-I-FD-Client-Info",
+			`{"U":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36","L":"zh-CN","Z":"GMT+08:00","V":"1.1","F":""}`,
+		).
+		SetHeader(
 			"X-Apple-Widget-Key",
 			"d39ba9916b7251055b22c7f910e2ea796ee65e98b2ddecea8f5dde8d9d1a815d",
 		).
@@ -204,6 +186,37 @@ func (c *ICloud) Login() error {
 		logrus.Debugf("auth attr: %s", authAttr)
 	}
 
+	userInfo := &UserInfo{}
+	login, err := c.client.R().
+		SetHeaders(CommonHeaders).
+		// SetHeader("X-Apple-Id-Session-Id", sessionID).
+		SetHeader("Origin", "https://www.icloud.com.cn").
+		SetBody(
+			map[string]interface{}{
+				"accountCountryCode": "CHN",
+				"dsWebAuthToken":     sessionToken,
+				"extended_login":     false,
+			},
+		).
+		SetResult(userInfo).
+		Post(
+			fmt.Sprintf(
+				"https://setup.icloud.com.cn/setup/ws/1/accountLogin?clientBuildNumber=2302Hotfix226&clientMasteringNumber=2302Hotfix226&clientId=%v",
+				c.clientID,
+			),
+		)
+	if err != nil {
+		logrus.Errorf("err: %v", err.Error())
+		return err
+	}
+	userStr, err := json.Marshal(userInfo)
+	if err != nil {
+		return err
+	}
+	logrus.Debugf("login status: %v", login.Status())
+	logrus.Debugf("user info: %v", string(userStr))
+	logrus.Debugf("user info: %v", login.Result())
+
 	if !userInfo.DsInfo.HsaEnabled && userInfo.DsInfo.HsaVersion <= 1 {
 		return nil
 	}
@@ -219,7 +232,6 @@ func (c *ICloud) Login() error {
 	logrus.Debugf("security code: %v", securityCodeStr)
 	securityCode, err := c.client.R().
 		SetHeaders(CommonHeaders).
-		SetHeader("Origin", "https://idmsa.apple.com").
 		SetHeader("Referer", "https://idmsa.apple.com").
 		SetHeader("X-Apple-ID-Session-Id", sessionID).
 		SetHeader("X-Apple-OAuth-Redirect-URI", "https://www.icloud.com.cn").
@@ -229,6 +241,10 @@ func (c *ICloud) Login() error {
 		SetHeader("X-Apple-OAuth-Response-Type", "code").
 		SetHeader("X-Requested-With", "XMLHttpRequest").
 		SetHeader("X-Apple-Domain-Id", "6").
+		SetHeader(
+			"X-Apple-I-FD-Client-Info",
+			`{"U":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36","L":"zh-CN","Z":"GMT+08:00","V":"1.1","F":""}`,
+		).
 		SetHeader("X-Apple-Frame-Id", "auth-7hlrtbcm-4qxg-yrgs-yfkw-34xkak3k").
 		SetHeader("sec-ch-ua", `"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"`).
 		SetHeader("sec-ch-ua-mobile", "?0").
